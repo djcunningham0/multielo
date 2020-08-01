@@ -3,11 +3,19 @@
 This package implements a multiplayer extension of the popular Elo rating
 system.
 
+ * [Installation](#installation)
+ * [Example Usage](#example-usage)
+ * [Methodology](#methodology)
+   * [Traditional Elo ratings](#traditional-elo-ratings)
+   * [Extension to multiplayer](#extension-to-multiplayer)
+
 ## Installation
 
 The package can be installed from GitHub with using ``pip install``::
 
-  pip install git+git://github.com/djcunningham0/multielo.git
+```
+pip install git+git://github.com/djcunningham0/multielo.git
+```
 
 ## Example Usage
 
