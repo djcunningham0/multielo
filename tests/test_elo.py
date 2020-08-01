@@ -32,7 +32,7 @@ def test_elo_changes():
     ratings = np.array([1000, 1000])
     assert np.allclose(elo.get_expected_scores(ratings), [0.5, 0.5])
     assert np.allclose(elo.get_new_ratings(ratings), [1016, 984])
-    ratings_2 = np.array([1200, 1000])
+    ratings_2 = [1200, 1000]  # should also work with a list
     assert np.allclose(elo.get_expected_scores(ratings_2), [0.75974693, 0.24025307])
     assert np.allclose(elo.get_new_ratings(ratings_2), [1207.68809835, 992.31190165])
     assert np.allclose(elo.get_expected_scores(ratings_2[::-1]), [0.24025307, 0.75974693])

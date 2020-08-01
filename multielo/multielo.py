@@ -43,17 +43,19 @@ class MultiElo:
 
         Example usage:
         >>> elo = MultiElo()
-        >>> elo.get_new_ratings(np.array([1200, 1000]))
+        >>> elo.get_new_ratings([1200, 1000])
         array([1207.68809835,  992.31190165])
-        >>> elo.get_new_ratings(np.array([1200, 1000, 1100, 900]))
+        >>> elo.get_new_ratings([1200, 1000, 1100, 900])
         array([1212.01868209, 1012.15595083, 1087.84404917,  887.98131791])
 
         :param initial_ratings: array of ratings (float values) in order of actual results
-        :type initial_ratings: ndarray
+        :type initial_ratings: ndarray or list
 
         :return: array of updated ratings (float values) in same order as input
         :rtype: ndarray
         """
+        if not isinstance(initial_ratings, ndarray):
+            initial_ratings = np.array(initial_ratings)
         n = len(initial_ratings)  # number of players
         actual_scores = self.get_actual_scores(n)
         expected_scores = self.get_expected_scores(initial_ratings)
@@ -71,24 +73,30 @@ class MultiElo:
         :rtype: ndarray
         """
         scores = self._score_func(n)
+        self._validate_actual_scores(scores)
+        return scores
+
+    @staticmethod
+    def _validate_actual_scores(scores):
         if not np.allclose(1, sum(scores)):
             raise ValueError("scoring function does not return scores summing to 1")
         if min(scores) != 0:
             raise ValueError("scoring function does not return minimum value of 0")
         if not np.all(np.diff(scores) < 0):
             raise ValueError("scoring function does not return monotonically decreasing values")
-        return scores
 
     def get_expected_scores(self, ratings):
         """
         Get the expected scores for all players given their ratings before the matchup.
 
         :param ratings: array of ratings for each player in a matchup
-        :type ratings: ndarray
+        :type ratings: ndarray or list
 
         :return: array of expected scores for all players
         :rtype: ndarray
         """
+        if not isinstance(ratings, ndarray):
+            ratings = np.array(ratings)
         if ratings.ndim > 1:
             raise ValueError(f"ratings should be 1-dimensional array (received {ratings.ndim})")
 

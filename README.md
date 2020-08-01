@@ -184,6 +184,10 @@ It is also worth noting that as ![equation](https://latex.codecogs.com/png.latex
 approaches 1, the exponential score function converges to the linear score
 function.
 
+The ![equation](https://latex.codecogs.com/png.latex?%5Calpha) value in the 
+exponential score function corresponds to the score_function_base parameter of
+the `MultiElo` object in this package.
+
 **Calculating new ratings**
 
 The new rating calculation is very similar to traditional Elo. We compare the
