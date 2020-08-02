@@ -13,9 +13,16 @@ def test_default_player():
     assert player.rating == defaults["INITIAL_RATING"]
 
 
+def test_player_with_history():
+    player = Player("test", rating_history=[(1, 1000), (2, 1100)], date=3)
+    assert player.rating == defaults["INITIAL_RATING"]
+    assert player.get_rating_as_of_date(1) == 1000
+    assert player.get_rating_as_of_date(2) == 1100
+
+
 def test_update_rating():
     player = Player("test", rating=1000)
-    player.update_rating(new_rating=1200)
+    player.update_rating(new_rating=1200, date=1)
     assert player.rating == 1200
 
 

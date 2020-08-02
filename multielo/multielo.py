@@ -1,5 +1,6 @@
 import numpy as np
 from numpy import ndarray
+from typing import Union
 from .config import defaults
 from .score_functions import create_exponential_score_function
 
@@ -12,22 +13,19 @@ class MultiElo:
 
     def __init__(
         self,
-        k_value=defaults["K_VALUE"],
-        d_value=defaults["D_VALUE"],
-        score_function_base=defaults["SCORING_FUNCTION_BASE"],
+        k_value: float = defaults["K_VALUE"],
+        d_value: float = defaults["D_VALUE"],
+        score_function_base: float = defaults["SCORING_FUNCTION_BASE"],
         custom_score_function=None,
     ):
         """
         :param k_value: K parameter in Elo algorithm that determines how much ratings increase or decrease
         after each match
-        :type k_value: float
         :param d_value: D parameter in Elo algorithm that determines how much Elo difference affects win
         probability
-        :type d_value: float
         :param score_function_base: base value to use for scoring function; scores are approximately
         multiplied by this value as you improve from one place to the next (minimum allowed value is 1,
         which results in a linear scoring function)
-        :type score_function_base: float
         :param custom_score_function: a function that takes an integer input and returns a numpy array
         of monotonically decreasing values summing to 1
         """
@@ -35,7 +33,7 @@ class MultiElo:
         self.d = d_value
         self._score_func = custom_score_function or create_exponential_score_function(base=score_function_base)
 
-    def get_new_ratings(self, initial_ratings):
+    def get_new_ratings(self, initial_ratings: Union[list, ndarray]) -> ndarray:
         """
         Update ratings based on results. Takes an array of ratings before the matchup and returns an array with
         the updated ratings. Provided array should be ordered by the actual results (first place finisher's
@@ -49,10 +47,7 @@ class MultiElo:
         array([1212.01868209, 1012.15595083, 1087.84404917,  887.98131791])
 
         :param initial_ratings: array of ratings (float values) in order of actual results
-        :type initial_ratings: ndarray or list
-
         :return: array of updated ratings (float values) in same order as input
-        :rtype: ndarray
         """
         if not isinstance(initial_ratings, ndarray):
             initial_ratings = np.array(initial_ratings)
@@ -62,22 +57,19 @@ class MultiElo:
         scale_factor = self.k * (n - 1)
         return initial_ratings + scale_factor * (actual_scores - expected_scores)
 
-    def get_actual_scores(self, n):
+    def get_actual_scores(self, n: int) -> ndarray:
         """
         Return the scores to be awarded to the players based on the results.
 
         :param n: number of players in the matchup
-        :type n: int
-
         :return: array of length n of scores to be assigned to first place, second place, and so on
-        :rtype: ndarray
         """
         scores = self._score_func(n)
         self._validate_actual_scores(scores)
         return scores
 
     @staticmethod
-    def _validate_actual_scores(scores):
+    def _validate_actual_scores(scores: ndarray):
         if not np.allclose(1, sum(scores)):
             raise ValueError("scoring function does not return scores summing to 1")
         if min(scores) != 0:
@@ -85,15 +77,12 @@ class MultiElo:
         if not np.all(np.diff(scores) < 0):
             raise ValueError("scoring function does not return monotonically decreasing values")
 
-    def get_expected_scores(self, ratings):
+    def get_expected_scores(self, ratings: Union[list, ndarray]) -> ndarray:
         """
         Get the expected scores for all players given their ratings before the matchup.
 
         :param ratings: array of ratings for each player in a matchup
-        :type ratings: ndarray or list
-
         :return: array of expected scores for all players
-        :rtype: ndarray
         """
         if not isinstance(ratings, ndarray):
             ratings = np.array(ratings)
