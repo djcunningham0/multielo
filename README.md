@@ -13,7 +13,7 @@ system.
 
 The package can be installed from GitHub with using ``pip install``::
 
-```
+```bash
 pip install git+git://github.com/djcunningham0/multielo.git
 ```
 
@@ -22,7 +22,7 @@ pip install git+git://github.com/djcunningham0/multielo.git
 The following example shows how to calculate updated Elo ratings after a 
 matchup using the default settings in the package.
 
-```
+```python
 >>> from multielo import MultiElo
 >>> import numpy as np
 >>>
@@ -41,10 +41,10 @@ array([920.48207999, 979.51792001])
 array([1208.34629612,  910.43382278,  981.21988111])
 ```
 
-See [``demo.ipynb``](https://github.com/djcunningham0/multielo/demo.ipynb) for 
-a more in-depth tutorial, including details on parameters that can be tuned in 
-the Elo algorithm and examples of how to use the Tracker and Player objects to 
-keep track of Elo ratings for a group of players over time.
+See [`demo.ipynb`](https://github.com/djcunningham0/multielo/blob/master/demo.ipynb) 
+for a more in-depth tutorial, including details on parameters that can be tuned
+in the Elo algorithm and examples of how to use the Tracker and Player objects 
+to keep track of Elo ratings for a group of players over time.
 
 ## Methodology
 
