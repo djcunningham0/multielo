@@ -96,7 +96,8 @@ class Player:
         self.rating_history.append((date, rating))
 
     def __str__(self):
-        return f"{self.id}: {round(self.rating, 2)} ({self.count_games()} games)"
+        n_games = self.count_games()
+        return f"{self.id}: {round(self.rating, 2)} ({n_games} game{'s' * (n_games != 1)})"
 
     def __repr__(self):
         return f"Player(id = {self.id}, rating = {round(self.rating, 2)}, n_games = {self.count_games()})"
