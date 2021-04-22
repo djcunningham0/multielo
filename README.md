@@ -11,10 +11,17 @@ system.
 
 ## Installation
 
-The package can be installed from GitHub with using ``pip install``::
+The package can be installed from GitHub with using ``pip``.
 
 ```bash
 pip install git+git://github.com/djcunningham0/multielo.git
+```
+
+You can install a specific released version of the package using tag names. For
+example, to install release v0.1.0 you can use:
+
+```bash
+pip install git+git://github.com/djcunningham0/multielo.git@v0.1.0
 ```
 
 ## Example Usage

@@ -1,7 +1,3 @@
-import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from multielo import Player, Tracker, MultiElo
 from multielo.config import defaults
 import pandas as pd
