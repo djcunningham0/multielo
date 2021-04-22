@@ -3,6 +3,7 @@ import pandas as pd
 from pandas import DataFrame
 from typing import Union, List, Tuple
 import logging
+import warnings
 from .multielo import MultiElo
 from .config import defaults
 
@@ -14,11 +15,12 @@ class Player:
     """
 
     def __init__(
-        self,
-        player_id: str,
-        rating: float = defaults["INITIAL_RATING"],
-        rating_history: List[Tuple[Union[str, float], float]] = None,
-        date: Union[str, float] = None,
+            self,
+            player_id: str,
+            rating: float = defaults["INITIAL_RATING"],
+            rating_history: List[Tuple[Union[str, float], float]] = None,
+            date: Union[str, float] = None,
+            logger: logging.Logger = None,
     ):
         """
         Instantiate a player.
@@ -37,6 +39,9 @@ class Player:
         else:
             self.rating_history = rating_history
 
+        self.logger = logger or logging.getLogger(__name__)
+        self.logger.info(f"created player with ID {player_id} and rating {rating}")
+
     def update_rating(self, new_rating: float, date: Union[str, float]):
         """
         Update a player's rating and rating history. (updates the self.rating and self.rating_history attributes)
@@ -44,6 +49,7 @@ class Player:
         :param new_rating: player's new rating
         :param date: date the new rating was achieved
         """
+        self.logger.info(f"Updating rating for {self.id}: {self.rating:.3f} --> {new_rating:.3f}")
         self.rating = new_rating
         self._update_rating_history(rating=new_rating, date=date)
 
@@ -123,7 +129,7 @@ class Tracker:
         elo_rater: MultiElo = MultiElo(),
         initial_rating: float = defaults["INITIAL_RATING"],
         player_df: DataFrame = None,
-        logger=None,
+        logger: logging.Logger = None,
     ):
         """
         Instantiate a tracker that will track player's ratings over time as matchups occur.
@@ -143,8 +149,8 @@ class Tracker:
         self.player_df = player_df
         self._validate_player_df()
 
-        self.logger = logger or logging.getLogger()
-        logging.basicConfig()
+        self.logger = logger or logging.getLogger(__name__)
+        self.logger.info(f"Created Tracker with Elo paramers K={self.elo.k}, D={self.elo.d}")
 
     def process_data(self, matchup_history_df: DataFrame, date_col: str = "date"):
         """
@@ -164,14 +170,9 @@ class Tracker:
             players = [self._get_or_create_player(row[x]) for x in place_cols if not pd.isna(row[x])]
             initial_ratings = np.array([player.rating for player in players])
             new_ratings = self.elo.get_new_ratings(initial_ratings)
+            self.logger.info(f"processing rating changes for date {date}...")
             for i, player in enumerate(players):
                 player.update_rating(new_ratings[i], date=date)
-
-            # log rating changes at INFO level
-            msg = f"{date}: "
-            for i, player in enumerate(players):
-                msg += f"{player.id}: {round(initial_ratings[i], 2)} --> {round(player.rating, 2)}; "
-            self.logger.info(msg)
 
     def get_current_ratings(self) -> DataFrame:
         """
@@ -200,7 +201,7 @@ class Tracker:
         for player in players:
             # check if there are any missing dates after the first entry (the initial rating)
             if any([x[0] is None for x in player.rating_history[1:]]):
-                self.logger.warning(f"WARNING: possible missing dates in history for Player {player.id}")
+                warnings.warn(f"WARNING: possible missing dates in history for Player {player.id}")
 
             player_history_df = DataFrame(player.rating_history, columns=["date", "rating"])
             player_history_df = player_history_df[~player_history_df["date"].isna()]
@@ -229,11 +230,10 @@ class Tracker:
             raise ValueError(f"a player with ID {player_id} already exists in the tracker")
 
         # create and add the player to the database
-        player = Player(player_id, rating=self.initial_player_rating)
+        player = Player(player_id, rating=self.initial_player_rating, logger=self.logger)
         add_df = DataFrame({"player_id": [player_id], "player": [player]})
         self.player_df = pd.concat([self.player_df, add_df])
         self._validate_player_df()
-        self.logger.info(f"created player with ID {player_id}")
         return player
 
     def _validate_player_df(self):

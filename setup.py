@@ -1,10 +1,14 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 
 def readme():
     with open("README.md") as f:
         return f.read()
 
+
+install_requires = ["numpy", "pandas"]
+test_requires = ["pytest"]
+dev_requires = test_requires
 
 # read version from _version.py
 with open("multielo/_version.py") as version_file:
@@ -20,9 +24,10 @@ setup(
     author="Danny Cunningham",
     author_email="djcunningham0@gmail.com",
     license="MIT",
-    packages=find_packages(),
+    packages=["multielo"],
     python_requires=">=3",
-    install_requires=["numpy", "pandas"],
+    install_requires=install_requires,
+    extras_require={"tests": test_requires, "dev": dev_requires},
     classifiers=[
         "Development Status :: 3 - Alpha",
         "License :: OSI Approved :: MIT License",
