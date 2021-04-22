@@ -97,10 +97,10 @@ class Player:
 
     def __str__(self):
         n_games = self.count_games()
-        return f"{self.id}: {round(self.rating, 2)} ({n_games} game{'s' * (n_games != 1)})"
+        return f"{self.id}: {self.rating:.2f} ({n_games} game{'s' * (n_games != 1)})"
 
     def __repr__(self):
-        return f"Player(id = {self.id}, rating = {round(self.rating, 2)}, n_games = {self.count_games()})"
+        return f"Player(id = {self.id}, rating = {self.rating:.2f)}, n_games = {self.count_games()})"
 
     def __eq__(self, other):
         return self.rating == other
