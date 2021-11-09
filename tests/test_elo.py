@@ -2,25 +2,7 @@ import pytest
 from multielo import MultiElo
 import numpy as np
 
-
-def test_elo_defaults():
-    # test if defaults are specified in config.py file
-    try:
-        from multielo.config import defaults
-    except ImportError:
-        assert False, "could not import defaults"
-
-    # test that the expected keys are in defaults
-    expected_keys = [
-        "INITIAL_RATING",
-        "K_VALUE",
-        "D_VALUE",
-        "SCORING_FUNCTION_BASE",
-    ]
-    for key in expected_keys:
-        assert key in defaults, f"{key} is not included in defaults"
-    for key in defaults:
-        assert key in expected_keys, f"{key} is in defaults but is not one of the expected keys"
+from typing import List, Tuple, Union
 
 
 @pytest.mark.parametrize(
@@ -52,11 +34,6 @@ def test_elo_defaults():
 def test_elo_changes(k, d, s, ratings, true_expected, true_new):
     """
     Test some known values to make sure Elo is calculating the correct updates.
-
-    :param ratings:
-    :param true_expected:
-    :param true_new:
-    :return:
     """
     elo = MultiElo(k_value=k, d_value=d, score_function_base=s)
     assert np.allclose(elo.get_expected_scores(ratings), true_expected)
@@ -64,7 +41,9 @@ def test_elo_changes(k, d, s, ratings, true_expected, true_new):
 
 
 def test_zero_sum():
-    # make sure expected scores sum to 1 and rating changes are zero sum
+    """
+    make sure expected scores sum to 1 and rating changes are zero sum
+    """
     for n_players in [2, 3, 4, 10]:
         for _ in range(10):
             k = np.random.uniform(16, 64)

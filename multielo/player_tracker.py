@@ -5,7 +5,9 @@ from typing import Union, List, Tuple
 import logging
 import warnings
 from .multielo import MultiElo
-from .config import defaults
+
+
+DEFAULT_INITIAL_RATING = 1000
 
 
 class Player:
@@ -17,7 +19,7 @@ class Player:
     def __init__(
             self,
             player_id: str,
-            rating: float = defaults["INITIAL_RATING"],
+            rating: float = DEFAULT_INITIAL_RATING,
             rating_history: List[Tuple[Union[str, float], float]] = None,
             date: Union[str, float] = None,
             logger: logging.Logger = None,
@@ -56,7 +58,7 @@ class Player:
     def get_rating_as_of_date(
         self,
         date: Union[str, float],
-        default_rating: float = defaults["INITIAL_RATING"]
+        default_rating: float = DEFAULT_INITIAL_RATING
     ) -> float:
         """
         Retrieve a player's rating as of a specified date. Finds an entry in self.rating history for the latest
@@ -100,7 +102,7 @@ class Player:
         return f"{self.id}: {self.rating:.2f} ({n_games} game{'s' * (n_games != 1)})"
 
     def __repr__(self):
-        return f"Player(id = {self.id}, rating = {self.rating:.2f)}, n_games = {self.count_games()})"
+        return f"Player(id = {self.id}, rating = {self.rating:.2f}, n_games = {self.count_games()})"
 
     def __eq__(self, other):
         return self.rating == other
@@ -128,7 +130,7 @@ class Tracker:
     def __init__(
         self,
         elo_rater: MultiElo = MultiElo(),
-        initial_rating: float = defaults["INITIAL_RATING"],
+        initial_rating: float = DEFAULT_INITIAL_RATING,
         player_df: DataFrame = None,
         logger: logging.Logger = None,
     ):

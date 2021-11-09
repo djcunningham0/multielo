@@ -2,8 +2,12 @@ import numpy as np
 from typing import Union, List
 import logging
 
-from .config import defaults
 from .score_functions import create_exponential_score_function
+
+
+DEFAULT_K_VALUE = 32
+DEFAULT_D_VALUE = 400
+DEFAULT_SCORING_FUNCTION_BASE = 1
 
 
 class MultiElo:
@@ -14,9 +18,9 @@ class MultiElo:
 
     def __init__(
         self,
-        k_value: float = defaults["K_VALUE"],
-        d_value: float = defaults["D_VALUE"],
-        score_function_base: float = defaults["SCORING_FUNCTION_BASE"],
+        k_value: float = DEFAULT_K_VALUE,
+        d_value: float = DEFAULT_D_VALUE,
+        score_function_base: float = DEFAULT_SCORING_FUNCTION_BASE,
         custom_score_function=None,
         log_base: int = 10,
         logger: logging.Logger = None,
