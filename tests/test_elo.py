@@ -2,7 +2,7 @@ import pytest
 from multielo import MultiElo
 import numpy as np
 
-from typing import List, Tuple, Union
+from typing import List
 
 
 @pytest.mark.parametrize(
@@ -54,3 +54,38 @@ def test_zero_sum():
                 f"expected ratings do not sum to 1 for k={k}, d={d}, ratings={ratings}"
             assert np.allclose(elo.get_new_ratings(ratings).sum(), ratings.sum()), \
                 f"rating changes are not zero sum for k={k}, d={d}, ratings={ratings}"
+
+
+@pytest.mark.parametrize(
+    "results, result_order, new_ratings",
+    [
+        ([1000, 1000], [1, 1], [1000, 1000]),
+        ([1200, 1000], [0, 0], [1191.6880983472654, 1008.3119016527346]),
+        ([1200, 1000, 800], [1, 2, 2], [1207.06479284,  989.33333333,  803.60187383]),
+        ([1200, 1000, 800], [1, 1, 2], [1196.39812617, 1010.66666667,  792.93520716]),
+        ([1200, 1000, 800], [1, 1, 1], [1185.7314595, 1000,  814.2685405]),
+    ]
+)
+def test_ties(results: List[float], result_order: List[int], new_ratings: List[float]):
+    elo = MultiElo(k_value=32, d_value=400, score_function_base=1)
+    assert np.allclose(elo.get_new_ratings(results, result_order=result_order), new_ratings)
+
+
+def test_out_of_order_ratings():
+    """If we reverse the change the order of ratings and account for it in result_order,
+    the new ratings should be the same"""
+    elo = MultiElo()
+    result_1 = elo.get_new_ratings([1200, 1000])
+    result_2 = elo.get_new_ratings([1000, 1200], result_order=[2, 1])
+    print(f"result_1: {result_1}")
+    print(f"result_2: {result_2}")
+    assert result_1[0] == result_2[1]
+    assert result_1[1] == result_2[0]
+
+    result_1 = elo.get_new_ratings([1200, 1000, 800], result_order=[1, 2, 2])
+    result_2 = elo.get_new_ratings([1000, 800, 1200], result_order=[2, 2, 1])
+    print(f"result_1: {result_1}")
+    print(f"result_2: {result_2}")
+    assert result_1[0] == result_2[2]
+    assert result_1[1] == result_2[0]
+    assert result_1[2] == result_2[1]

@@ -45,7 +45,7 @@ def test_player_equality():
 
 
 def test_tracker():
-    # test with some known results
+    """test with some known results"""
     elo = MultiElo(k_value=32, d_value=400, score_function_base=1)
     tracker = Tracker(elo_rater=elo, initial_rating=1000)
     data = pd.DataFrame({
@@ -68,3 +68,23 @@ def test_tracker():
     assert marge == 1000.5940386640012
     assert bart == 980.6241719618897
     assert lisa == 1041.2985450366014
+
+
+def test_tie_data():
+    elo = MultiElo(k_value=32, d_value=400, score_function_base=1)
+    tracker = Tracker(elo_rater=elo, initial_rating=1000)
+    data = pd.DataFrame({
+        "date": [1, 2, 3, 4, 5],
+        "1st": ["Homer", ("Lisa", "Bart"), ("Lisa", "Marge"), ("Marge", "Homer", "Bart"), "Lisa"],
+        "2nd": ["Marge", None, "Homer", None, ("Bart", "Marge")],
+        "3rd": ["Bart", "Homer", None, None, "Homer"]
+    })
+    tracker.process_data(data)
+    homer = tracker.retrieve_existing_player("Homer")
+    marge = tracker.retrieve_existing_player("Marge")
+    bart = tracker.retrieve_existing_player("Bart")
+    lisa = tracker.retrieve_existing_player("Lisa")
+    assert homer == 956.5862536380732
+    assert marge == 1008.4435164345906
+    assert bart == 992.2443714740361
+    assert lisa == 1042.7258584533
