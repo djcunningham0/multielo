@@ -1,9 +1,15 @@
 import numpy as np
-from typing import Union, List
+from typing import Union, List, Callable
 import logging
 
-from .config import defaults
-from .score_functions import create_exponential_score_function
+from multielo.score_functions import create_exponential_score_function
+
+
+DEFAULT_K_VALUE = 32
+DEFAULT_D_VALUE = 400
+DEFAULT_SCORING_FUNCTION_BASE = 1
+
+_default_logger = logging.getLogger("multielo.multielo")
 
 
 class MultiElo:
@@ -14,10 +20,10 @@ class MultiElo:
 
     def __init__(
         self,
-        k_value: float = defaults["K_VALUE"],
-        d_value: float = defaults["D_VALUE"],
-        score_function_base: float = defaults["SCORING_FUNCTION_BASE"],
-        custom_score_function=None,
+        k_value: float = DEFAULT_K_VALUE,
+        d_value: float = DEFAULT_D_VALUE,
+        score_function_base: float = DEFAULT_SCORING_FUNCTION_BASE,
+        custom_score_function: Callable = None,
         log_base: int = 10,
         logger: logging.Logger = None,
     ):
@@ -39,9 +45,13 @@ class MultiElo:
         self.d = d_value
         self._score_func = custom_score_function or create_exponential_score_function(base=score_function_base)
         self._log_base = log_base
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or _default_logger
 
-    def get_new_ratings(self, initial_ratings: Union[List[float], np.ndarray]) -> np.ndarray:
+    def get_new_ratings(
+            self,
+            initial_ratings: Union[List[float], np.ndarray],
+            result_order: List[int] = None,
+    ) -> np.ndarray:
         """
         Update ratings based on results. Takes an array of ratings before the matchup and returns an array with
         the updated ratings. Provided array should be ordered by the actual results (first place finisher's
@@ -55,36 +65,58 @@ class MultiElo:
         array([1212.01868209, 1012.15595083, 1087.84404917,  887.98131791])
 
         :param initial_ratings: array of ratings (float values) in order of actual results
+        :param result_order: list where each value indicates the place the player in the same index of
+        initial_ratings finished in. Lower is better. Identify ties by entering the same value for players
+        that tied. For example, [1, 2, 3] indicates that the first listed player won, the second listed player
+        finished 2nd, and the third listed player finished 3rd. [1, 2, 2] would indicate that the second
+        and third players tied for 2nd place. (default = range(len(initial_ratings))
         :return: array of updated ratings (float values) in same order as input
         """
         if not isinstance(initial_ratings, np.ndarray):
             initial_ratings = np.array(initial_ratings)
         n = len(initial_ratings)  # number of players
-        actual_scores = self.get_actual_scores(n)
+        actual_scores = self.get_actual_scores(n, result_order)
         expected_scores = self.get_expected_scores(initial_ratings)
         scale_factor = self.k * (n - 1)
         self.logger.debug(f"scale factor: {scale_factor}")
         return initial_ratings + scale_factor * (actual_scores - expected_scores)
 
-    def get_actual_scores(self, n: int) -> np.ndarray:
+    def get_actual_scores(self, n: int, result_order: List[int] = None) -> np.ndarray:
         """
         Return the scores to be awarded to the players based on the results.
 
         :param n: number of players in the matchup
+        :param result_order: list indicating order of finish (see docstring for MultiElo.get_new_ratings
+        for more details
         :return: array of length n of scores to be assigned to first place, second place, and so on
         """
+        # calculate actual scores according to score function, then sort in order of finish
+        result_order = result_order or list(range(n))
         scores = self._score_func(n)
-        self._validate_actual_scores(scores)
+        scores = scores[np.argsort(np.argsort(result_order))]
+
+        # if there are ties, average the scores of all tied players
+        distinct_results = set(result_order)
+        if len(distinct_results) != n:
+            for place in distinct_results:
+                idx = [i for i, x in enumerate(result_order) if x == place]
+                scores[idx] = scores[idx].mean()
+
+        self._validate_actual_scores(scores, result_order)
         self.logger.debug(f"calculated actual scores: {scores}")
         return scores
 
     @staticmethod
-    def _validate_actual_scores(scores: np.ndarray):
+    def _validate_actual_scores(scores: np.ndarray, result_order: List[int]):
         if not np.allclose(1, sum(scores)):
             raise ValueError("scoring function does not return scores summing to 1")
         if min(scores) != 0:
-            raise ValueError("scoring function does not return minimum value of 0")
-        if not np.all(np.diff(scores) < 0):
+            # tie for last place means minimum score doesn't have to be zero,
+            # so only raise error if there isn't a tie for last place
+            last_place = max(result_order)
+            if result_order.count(last_place) == 1:
+                raise ValueError("scoring function does not return minimum value of 0")
+        if not np.all(np.diff(scores[np.argsort(result_order)]) <= 0):
             raise ValueError("scoring function does not return monotonically decreasing values")
 
     def get_expected_scores(self, ratings: Union[List[float], np.ndarray]) -> np.ndarray:

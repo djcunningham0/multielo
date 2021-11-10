@@ -1,5 +1,9 @@
+import pytest
 import numpy as np
 from multielo.score_functions import linear_score_function, create_exponential_score_function
+from multielo import MultiElo
+
+from typing import List
 
 
 def test_2_player_score_function():
@@ -41,3 +45,27 @@ def test_exponential_score_function():
             # differences should also be monotonically increasing (less negative) for exponential score function
             assert np.all(np.diff(score_diffs) > 0), \
                 f"exponential score function diffs are not monotonically increasing for base={base}, n={n}: {scores}"
+
+
+@pytest.mark.parametrize(
+    "result_order, actual_scores, base",
+    [
+        ([1, 1], [0.5, 0.5], 1),
+        ([1, 1], [0.5, 0.5], 2),
+        ([1, 1, 1], [1/3, 1/3, 1/3], 1),
+        ([1, 2, 2], [2/3, 1/6, 1/6], 1),
+        ([1, 1, 2], [0.5, 0.5, 0], 1),
+        ([1, 1, 1], [1/3, 1/3, 1/3], 2),
+        ([1, 2, 2], [0.75, 0.125, 0.125], 2),
+        ([1, 1, 2], [0.5, 0.5, 0], 2),
+    ]
+)
+def test_tie_actual_scores(
+        result_order: List[int],
+        actual_scores: List[float],
+        base: float,
+):
+    elo = MultiElo(score_function_base=base)
+    n = len(result_order)
+    scores = elo.get_actual_scores(n=n, result_order=result_order)
+    assert np.allclose(scores, actual_scores)

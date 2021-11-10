@@ -1,17 +1,17 @@
 from multielo import Player, Tracker, MultiElo
-from multielo.config import defaults
+from multielo.player_tracker import DEFAULT_INITIAL_RATING
 import pandas as pd
 import numpy as np
 
 
 def test_default_player():
     player = Player("test")
-    assert player.rating == defaults["INITIAL_RATING"]
+    assert player.rating == DEFAULT_INITIAL_RATING
 
 
 def test_player_with_history():
     player = Player("test", rating_history=[(1, 1000), (2, 1100)], date=3)
-    assert player.rating == defaults["INITIAL_RATING"]
+    assert player.rating == DEFAULT_INITIAL_RATING
     assert player.get_rating_as_of_date(1) == 1000
     assert player.get_rating_as_of_date(2) == 1100
 
@@ -27,7 +27,7 @@ def test_get_rating_as_of_date():
     player.update_rating(new_rating=1100, date="2020-02-01")
     player.update_rating(new_rating=1200, date="2020-03-01")
     player.update_rating(new_rating=1300, date="2020-04-01")
-    assert player.get_rating_as_of_date("2019-12-31") == defaults["INITIAL_RATING"]
+    assert player.get_rating_as_of_date("2019-12-31") == DEFAULT_INITIAL_RATING
     assert player.get_rating_as_of_date("2020-01-15") == 900
     assert player.get_rating_as_of_date("2020-02-15") == 1100
     assert player.get_rating_as_of_date("2020-03-15") == 1200
@@ -45,7 +45,7 @@ def test_player_equality():
 
 
 def test_tracker():
-    # test with some known results
+    """test with some known results"""
     elo = MultiElo(k_value=32, d_value=400, score_function_base=1)
     tracker = Tracker(elo_rater=elo, initial_rating=1000)
     data = pd.DataFrame({
@@ -68,3 +68,23 @@ def test_tracker():
     assert marge == 1000.5940386640012
     assert bart == 980.6241719618897
     assert lisa == 1041.2985450366014
+
+
+def test_tie_data():
+    elo = MultiElo(k_value=32, d_value=400, score_function_base=1)
+    tracker = Tracker(elo_rater=elo, initial_rating=1000)
+    data = pd.DataFrame({
+        "date": [1, 2, 3, 4, 5],
+        "1st": ["Homer", ("Lisa", "Bart"), ("Lisa", "Marge"), ("Marge", "Homer", "Bart"), "Lisa"],
+        "2nd": ["Marge", None, "Homer", None, ("Bart", "Marge")],
+        "3rd": ["Bart", "Homer", None, None, "Homer"]
+    })
+    tracker.process_data(data)
+    homer = tracker.retrieve_existing_player("Homer")
+    marge = tracker.retrieve_existing_player("Marge")
+    bart = tracker.retrieve_existing_player("Bart")
+    lisa = tracker.retrieve_existing_player("Lisa")
+    assert homer == 956.5862536380732
+    assert marge == 1008.4435164345906
+    assert bart == 992.2443714740361
+    assert lisa == 1042.7258584533

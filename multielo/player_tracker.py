@@ -4,8 +4,12 @@ from pandas import DataFrame
 from typing import Union, List, Tuple
 import logging
 import warnings
-from .multielo import MultiElo
-from .config import defaults
+from multielo.multielo import MultiElo
+
+
+DEFAULT_INITIAL_RATING = 1000
+
+_default_logger = logging.getLogger("multielo.player_tracker")
 
 
 class Player:
@@ -17,7 +21,7 @@ class Player:
     def __init__(
             self,
             player_id: str,
-            rating: float = defaults["INITIAL_RATING"],
+            rating: float = DEFAULT_INITIAL_RATING,
             rating_history: List[Tuple[Union[str, float], float]] = None,
             date: Union[str, float] = None,
             logger: logging.Logger = None,
@@ -39,7 +43,7 @@ class Player:
         else:
             self.rating_history = rating_history
 
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or _default_logger
         self.logger.info(f"created player with ID {player_id} and rating {rating}")
 
     def update_rating(self, new_rating: float, date: Union[str, float]):
@@ -56,7 +60,7 @@ class Player:
     def get_rating_as_of_date(
         self,
         date: Union[str, float],
-        default_rating: float = defaults["INITIAL_RATING"]
+        default_rating: float = DEFAULT_INITIAL_RATING
     ) -> float:
         """
         Retrieve a player's rating as of a specified date. Finds an entry in self.rating history for the latest
@@ -96,10 +100,11 @@ class Player:
         self.rating_history.append((date, rating))
 
     def __str__(self):
-        return f"{self.id}: {round(self.rating, 2)} ({self.count_games()} games)"
+        n_games = self.count_games()
+        return f"{self.id}: {self.rating:.2f} ({n_games} game{'s' * (n_games != 1)})"
 
     def __repr__(self):
-        return f"Player(id = {self.id}, rating = {round(self.rating, 2)}, n_games = {self.count_games()})"
+        return f"Player(id = {self.id}, rating = {self.rating:.2f}, n_games = {self.count_games()})"
 
     def __eq__(self, other):
         return self.rating == other
@@ -127,7 +132,7 @@ class Tracker:
     def __init__(
         self,
         elo_rater: MultiElo = MultiElo(),
-        initial_rating: float = defaults["INITIAL_RATING"],
+        initial_rating: float = DEFAULT_INITIAL_RATING,
         player_df: DataFrame = None,
         logger: logging.Logger = None,
     ):
@@ -149,7 +154,7 @@ class Tracker:
         self.player_df = player_df
         self._validate_player_df()
 
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or _default_logger
         self.logger.info(f"Created Tracker with Elo paramers K={self.elo.k}, D={self.elo.d}")
 
     def process_data(self, matchup_history_df: DataFrame, date_col: str = "date"):
@@ -157,19 +162,64 @@ class Tracker:
         Process the full matchup history of a group of players. Update the ratings and rating history for all
         players in found in the matchup history.
 
+        Annotate ties using a tuple of player IDs. For example, this data would indicate that Lisa came in
+        first place, Bart and Marge tied for second, and Homer came in 3rd:
+
+        |   date | 1st                        | 2nd               | 3rd   | 4th |
+        |--------|----------------------------|-------------------|-------|-----|
+        |      1 | Lisa                       | ('Bart', 'Marge') | Homer |     |
+
+        Note: Only the order of the players matters, not the specific columns they appear in. For example,
+        Homer could appear in either the 3rd or 4th column in the example data above and the results would
+        be the same.
+
+        Example usage:
+        >>> elo = MultiElo()
+        >>> tracker = Tracker(elo)
+        >>> data = pd.DataFrame([[1, "Lisa", "Homer"], [2, "Marge", "Bart"], [3, "Lisa", "Bart"]])
+        >>> data.columns = ["date", "1st", "2nd"]
+        >>> tracker.process_data(data)
+        >>> tracker.get_current_ratings()
+           rank player_id  n_games       rating
+        0     1      Lisa        2  1030.530498
+        1     2     Marge        1  1016.000000
+        2     3     Homer        1   984.000000
+        3     4      Bart        2   969.469502
+
+
         :param matchup_history_df: dataframe of matchup history with a column for date and one column for each
         possible finishing place (e.g., "date", "1st", "2nd", "3rd", ...). Finishing place columns should be in
-        order of first to last.
+        order of first to last. Column names do not matter.
         :param date_col: name of the date column
         """
         matchup_history_df = matchup_history_df.sort_values(date_col).reset_index(drop=True)
         place_cols = [x for x in matchup_history_df.columns if x != date_col]
         matchup_history_df = matchup_history_df.dropna(how="all", axis=0, subset=place_cols)  # drop rows if all NaN
+
+        # loop through each row of history, then loop through players for each date
         for _, row in matchup_history_df.iterrows():
             date = row[date_col]
-            players = [self._get_or_create_player(row[x]) for x in place_cols if not pd.isna(row[x])]
+            players = []
+            result_order = []
+            for i, col in enumerate(place_cols):
+                current_player = row[col]
+                if current_player is None:
+                    pass
+                elif isinstance(current_player, (tuple, list)):
+                    # multiple players (a tie)
+                    players += [self._get_or_create_player(x) for x in current_player]
+                    result_order += [i] * len(current_player)
+                else:
+                    # one player
+                    players.append(self._get_or_create_player(current_player))
+                    result_order.append(i)
             initial_ratings = np.array([player.rating for player in players])
-            new_ratings = self.elo.get_new_ratings(initial_ratings)
+            self.logger.debug(f"found players: {players}")
+            self.logger.debug(f"found ratings: {list(initial_ratings)}")
+            self.logger.debug(f"found result_order: {result_order}")
+
+            # process data for one date
+            new_ratings = self.elo.get_new_ratings(initial_ratings, result_order=result_order)
             self.logger.info(f"processing rating changes for date {date}...")
             for i, player in enumerate(players):
                 player.update_rating(new_ratings[i], date=date)
