@@ -15,14 +15,14 @@ For additional information, see the [blog post](https://towardsdatascience.com/d
 The package can be installed from GitHub with using ``pip``.
 
 ```bash
-pip install git+git://github.com/djcunningham0/multielo.git
+pip install git+https://github.com/djcunningham0/multielo.git
 ```
 
 You can install a specific released version of the package using tag names.
 For example, to install release v0.1.0 you can use:
 
 ```bash
-pip install git+git://github.com/djcunningham0/multielo.git@v0.1.0
+pip install git+https://github.com/djcunningham0/multielo.git@v0.1.0
 ```
 
 ## Example Usage
