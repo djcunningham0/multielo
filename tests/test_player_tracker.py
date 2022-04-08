@@ -2,6 +2,9 @@ from multielo import Player, Tracker, MultiElo
 from multielo.player_tracker import DEFAULT_INITIAL_RATING
 import pandas as pd
 import numpy as np
+import pickle
+import tempfile
+import os
 
 
 def test_default_player():
@@ -70,6 +73,20 @@ def test_tracker():
     assert lisa == 1041.2985450366014
 
 
+def test_tracker_equal():
+    data = pd.DataFrame({
+        "date": ["2020-03-29", "2020-04-05", "2020-04-12"],
+        "1st": ["Homer", "Lisa", "Lisa"],
+        "2nd": ["Marge", "Bart", "Marge"],
+        "3rd": ["Bart", "Homer", "Homer"]
+    })
+    tracker_1 = Tracker()
+    tracker_2 = Tracker()
+    tracker_1.process_data(data)
+    tracker_2.process_data(data)
+    assert tracker_1 == tracker_2
+
+
 def test_tie_data():
     elo = MultiElo(k_value=32, d_value=400, score_function_base=1)
     tracker = Tracker(elo_rater=elo, initial_rating=1000)
@@ -88,3 +105,41 @@ def test_tie_data():
     assert marge == 1008.4435164345906
     assert bart == 992.2443714740361
     assert lisa == 1042.7258584533
+
+
+def test_pickle_player():
+    player = Player("test")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file = os.path.join(tmp_dir, "player.pickle")
+        # test that we can pickle the Player object
+        with open(file, "wb") as f:
+            pickle.dump(player, f)
+        # test that we can load from the pickle file and it's equivalent to the original object
+        with open(file, "rb") as f:
+            new_player = pickle.load(f)
+            assert new_player == player
+
+
+def test_pickle_tracker_player_df():
+    """Test that we can pickle the Tracker.player_df object. This is the object we need
+    to export and load for batch processing."""
+    data = pd.DataFrame({
+        "date": ["2020-03-29", "2020-04-05", "2020-04-12"],
+        "1st": ["Homer", "Lisa", "Lisa"],
+        "2nd": ["Marge", "Bart", "Marge"],
+        "3rd": ["Bart", "Homer", "Homer"]
+    })
+    tracker = Tracker()
+    tracker.process_data(data)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file = os.path.join(tmp_dir, "player_df.pickle")
+        # test that we can pickle the Tracker object
+        with open(file, "wb") as f:
+            pickle.dump(tracker.player_df, f)
+        # test that we can load from the pickle file and it's equivalent to the original object
+        with open(file, "rb") as f:
+            new_player_df = pickle.load(f)
+            new_tracker = Tracker(player_df=new_player_df)
+            assert new_tracker == tracker

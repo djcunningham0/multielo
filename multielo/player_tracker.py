@@ -9,7 +9,7 @@ from multielo.multielo import MultiElo
 
 DEFAULT_INITIAL_RATING = 1000
 
-_default_logger = logging.getLogger("multielo.player_tracker")
+logger = logging.getLogger("multielo.player_tracker")
 
 
 class Player:
@@ -24,7 +24,6 @@ class Player:
             rating: float = DEFAULT_INITIAL_RATING,
             rating_history: List[Tuple[Union[str, float], float]] = None,
             date: Union[str, float] = None,
-            logger: logging.Logger = None,
     ):
         """
         Instantiate a player.
@@ -42,9 +41,7 @@ class Player:
             self._update_rating_history(rating, date)
         else:
             self.rating_history = rating_history
-
-        self.logger = logger or _default_logger
-        self.logger.info(f"created player with ID {player_id} and rating {rating}")
+        logger.info(f"created player with ID {player_id} and rating {rating}")
 
     def update_rating(self, new_rating: float, date: Union[str, float]):
         """
@@ -53,7 +50,7 @@ class Player:
         :param new_rating: player's new rating
         :param date: date the new rating was achieved
         """
-        self.logger.info(f"Updating rating for {self.id}: {self.rating:.3f} --> {new_rating:.3f}")
+        logger.info(f"Updating rating for {self.id}: {self.rating:.3f} --> {new_rating:.3f}")
         self.rating = new_rating
         self._update_rating_history(rating=new_rating, date=date)
 
@@ -134,7 +131,6 @@ class Tracker:
         elo_rater: MultiElo = MultiElo(),
         initial_rating: float = DEFAULT_INITIAL_RATING,
         player_df: DataFrame = None,
-        logger: logging.Logger = None,
     ):
         """
         Instantiate a tracker that will track player's ratings over time as matchups occur.
@@ -143,7 +139,6 @@ class Tracker:
         :param initial_rating: initial rating value for new players
         :param player_df: dataframe of existing players. New players will be added to the dataframe when they
         appear in a matchup for the first time. If None, begin with no players in the dataframe.
-        :param logger: use this logger if specified, otherwise create a logger with logging.getLogger()
         """
         self.elo = elo_rater
         self.initial_player_rating = initial_rating
@@ -153,9 +148,7 @@ class Tracker:
 
         self.player_df = player_df
         self._validate_player_df()
-
-        self.logger = logger or _default_logger
-        self.logger.info(f"Created Tracker with Elo paramers K={self.elo.k}, D={self.elo.d}")
+        logger.info(f"Created Tracker with Elo paramers K={self.elo.k}, D={self.elo.d}")
 
     def process_data(self, matchup_history_df: DataFrame, date_col: str = "date"):
         """
@@ -214,13 +207,13 @@ class Tracker:
                     players.append(self._get_or_create_player(current_player))
                     result_order.append(i)
             initial_ratings = np.array([player.rating for player in players])
-            self.logger.debug(f"found players: {players}")
-            self.logger.debug(f"found ratings: {list(initial_ratings)}")
-            self.logger.debug(f"found result_order: {result_order}")
+            logger.debug(f"found players: {players}")
+            logger.debug(f"found ratings: {list(initial_ratings)}")
+            logger.debug(f"found result_order: {result_order}")
 
             # process data for one date
             new_ratings = self.elo.get_new_ratings(initial_ratings, result_order=result_order)
-            self.logger.info(f"processing rating changes for date {date}...")
+            logger.info(f"processing rating changes for date {date}...")
             for i, player in enumerate(players):
                 player.update_rating(new_ratings[i], date=date)
 
@@ -280,7 +273,7 @@ class Tracker:
             raise ValueError(f"a player with ID {player_id} already exists in the tracker")
 
         # create and add the player to the database
-        player = Player(player_id, rating=self.initial_player_rating, logger=self.logger)
+        player = Player(player_id, rating=self.initial_player_rating)
         add_df = DataFrame({"player_id": [player_id], "player": [player]})
         self.player_df = pd.concat([self.player_df, add_df])
         self._validate_player_df()
@@ -297,3 +290,6 @@ class Tracker:
 
     def __repr__(self):
         return f"Tracker({self.player_df.shape[0]} total players)"
+
+    def __eq__(self, other):
+        return np.all(self.player_df.sort_values("player_id") == other.player_df.sort_values("player_id"))
