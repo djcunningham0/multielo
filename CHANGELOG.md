@@ -7,6 +7,8 @@
 ### Added
 
 * Ability to save and load the player ratings from a Tracker object.
+* Added the option to disable tracking the full history of each player in the Tracker object.
+Intended for use with large datasets, where disabling full history could reduce memory footprint substantially.
 
 ### Changed
 
