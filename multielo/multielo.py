@@ -9,7 +9,7 @@ DEFAULT_K_VALUE = 32
 DEFAULT_D_VALUE = 400
 DEFAULT_SCORING_FUNCTION_BASE = 1
 
-_default_logger = logging.getLogger("multielo.multielo")
+logger = logging.getLogger("multielo.multielo")
 
 
 class MultiElo:
@@ -25,7 +25,6 @@ class MultiElo:
         score_function_base: float = DEFAULT_SCORING_FUNCTION_BASE,
         custom_score_function: Callable = None,
         log_base: int = 10,
-        logger: logging.Logger = None,
     ):
         """
         :param k_value: K parameter in Elo algorithm that determines how much ratings increase or decrease
@@ -39,13 +38,11 @@ class MultiElo:
         of monotonically decreasing values summing to 1
         :param log_base: base to use for logarithms throughout the Elo algorithm. Traditionally Elo
         uses base-10 logs
-        :param logger: logger to use (optional)
         """
         self.k = k_value
         self.d = d_value
         self._score_func = custom_score_function or create_exponential_score_function(base=score_function_base)
         self._log_base = log_base
-        self.logger = logger or _default_logger
 
     def get_new_ratings(
             self,
@@ -78,7 +75,7 @@ class MultiElo:
         actual_scores = self.get_actual_scores(n, result_order)
         expected_scores = self.get_expected_scores(initial_ratings)
         scale_factor = self.k * (n - 1)
-        self.logger.debug(f"scale factor: {scale_factor}")
+        logger.debug(f"scale factor: {scale_factor}")
         return initial_ratings + scale_factor * (actual_scores - expected_scores)
 
     def get_actual_scores(self, n: int, result_order: List[int] = None) -> np.ndarray:
@@ -103,7 +100,7 @@ class MultiElo:
                 scores[idx] = scores[idx].mean()
 
         self._validate_actual_scores(scores, result_order)
-        self.logger.debug(f"calculated actual scores: {scores}")
+        logger.debug(f"calculated actual scores: {scores}")
         return scores
 
     @staticmethod
@@ -126,7 +123,7 @@ class MultiElo:
         :param ratings: array of ratings for each player in a matchup
         :return: array of expected scores for all players
         """
-        self.logger.debug(f"computing expected scores for {ratings}")
+        logger.debug(f"computing expected scores for {ratings}")
         if not isinstance(ratings, np.ndarray):
             ratings = np.array(ratings)
         if ratings.ndim > 1:
@@ -134,12 +131,12 @@ class MultiElo:
 
         # get all pairwise differences
         diff_mx = ratings - ratings[:, np.newaxis]
-        self.logger.debug(f"diff_mx = \n{diff_mx}")
+        logger.debug(f"diff_mx = \n{diff_mx}")
 
         # get individual contributions to expected score using logistic function
         logistic_mx = 1 / (1 + self._log_base ** (diff_mx / self.d))
         np.fill_diagonal(logistic_mx, 0)
-        self.logger.debug(f"logistic_mx = \n{logistic_mx}")
+        logger.debug(f"logistic_mx = \n{logistic_mx}")
 
         # get each expected score (sum individual contributions, then scale)
         expected_scores = logistic_mx.sum(axis=1)
@@ -150,7 +147,7 @@ class MultiElo:
         # this should be guaranteed, but check to make sure
         if not np.allclose(1, sum(expected_scores)):
             raise ValueError("expected scores do not sum to 1")
-        self.logger.debug(f"calculated expected scores: {expected_scores}")
+        logger.debug(f"calculated expected scores: {expected_scores}")
         return expected_scores
 
     def simulate_win_probabilities(
@@ -202,7 +199,7 @@ class MultiElo:
         n_players = len(ratings)
         n_sim = int(n_sim)
         scores = np.zeros((n_players, n_sim))
-        self.logger.debug(f"simulating {n_sim:,} scores for each player")
+        logger.debug(f"simulating {n_sim:,} scores for each player")
         for i, rating in enumerate(ratings):
             scores[idx[i], :] = _gumbel_sample(
                 loc=rating,
@@ -210,12 +207,12 @@ class MultiElo:
                 size=int(n_sim),
                 base=self._log_base
             )
-            self.logger.debug(f"finished sampling {n_sim:,} scores for player {i+1} of {n_players}")
+            logger.debug(f"finished sampling {n_sim:,} scores for player {i+1} of {n_players}")
 
         # use the scores to decide the order of finish (highest score wins) and
         # create matrix with proportion of times each player finishes in each place
         result_mx = self._convert_scores_to_result_proportions(scores)
-        self.logger.debug(f"finished simulation")
+        logger.debug(f"finished simulation")
         return result_mx
 
     @staticmethod
