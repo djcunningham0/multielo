@@ -128,14 +128,14 @@ def test_pickle_tracker_player_df():
     tracker.process_data(DATA)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        file = os.path.join(tmp_dir, "player_df.pickle")
+        file = os.path.join(tmp_dir, "players.pickle")
         # test that we can pickle the Tracker object
         with open(file, "wb") as f:
-            pickle.dump(tracker.player_df, f)
+            pickle.dump(tracker.players, f)
         # test that we can load from the pickle file and it's equivalent to the original object
         with open(file, "rb") as f:
-            new_player_df = pickle.load(f)
-            new_tracker = Tracker(player_df=new_player_df)
+            new_players = pickle.load(f)
+            new_tracker = Tracker(players=new_players)
             assert new_tracker == tracker
 
 
@@ -146,7 +146,7 @@ def test_save_and_load_player_data():
     with tempfile.TemporaryDirectory() as tmp_dir:
         file = os.path.join(tmp_dir, "player_df.pickle")
         tracker.save_player_data(file)
-        new_tracker = Tracker(player_df=file)
+        new_tracker = Tracker(players=file)
         assert tracker == new_tracker
 
 
@@ -157,68 +157,49 @@ def test_save_and_load_player_data_no_history():
     with tempfile.TemporaryDirectory() as tmp_dir:
         file = os.path.join(tmp_dir, "player_df.pickle")
         tracker.save_player_data(file, save_full_history=False)
-        new_tracker = Tracker(player_df=file)
+        new_tracker = Tracker(players=file)
         assert tracker == new_tracker  # this checks that all player IDs and ratings are equal
-        assert all(x.count_games() == 0 for x in new_tracker.player_df["player"])
+        assert all(x.count_games() == 0 for x in new_tracker.players)
 
 
-def test_good_player_df():
-    player_df = pd.DataFrame({
-        "player_id": ["test", "test_2"],
-        "player": [Player("test"), Player("test_2")],
-    })
-    tracker = Tracker(player_df=player_df)
+def test_good_player_list():
+    players = [Player("test"), Player("test_2")]
+    _ = Tracker(players=players)
     # should not raise an exception
 
 
-def test_bad_player_df():
-    # no player_id column
-    player_df = pd.DataFrame({"player": [Player("test"), Player("test_2")]})
-    with pytest.raises(KeyError):
-        _ = Tracker(player_df=player_df)
-
-    # no player column
-    player_df = pd.DataFrame({"player_id": ["test", "test_2"]})
-    with pytest.raises(KeyError):
-        _ = Tracker(player_df=player_df)
-
-    # IDs don't match
-    player_df = pd.DataFrame({
+def test_bad_player_list():
+    # wrong data type (this was the old syntax)
+    players = pd.DataFrame({
         "player_id": ["test", "test_2"],
-        "player": [Player("a"), Player("b")],
+        "player": [Player("test"), Player("test_2")],
     })
-    with pytest.raises(ValueError):
-        _ = Tracker(player_df=player_df)
+    with pytest.raises(TypeError):
+        _ = Tracker(players=players)
 
     # duplicate players
-    player_df = pd.DataFrame({
-        "player_id": ["test", "test"],
-        "player": [Player("test"), Player("test")],
-    })
+    players = [Player("test"), Player("test")]
     with pytest.raises(ValueError):
-        _ = Tracker(player_df=player_df)
+        _ = Tracker(players=players)
 
-    # bad type in player column
-    player_df = pd.DataFrame({
-        "player_id": ["test", "test_2"],
-        "player": [{"id": "test", "rating": 1000}, {"id": "test_2", "rating": 1000}],
-    })
-    with pytest.raises(ValueError):
-        _ = Tracker(player_df=player_df)
+    # bad type
+    players = [{"id": "test", "rating": 1000}, {"id": "test_2", "rating": 1000}]
+    with pytest.raises(TypeError):
+        _ = Tracker(players=players)
 
     # bad type
     with pytest.raises(TypeError):
-        _ = Tracker(player_df=1)
+        _ = Tracker(players=1)
 
     # string that isn't a valid filepath
     with pytest.raises(FileNotFoundError):
-        _ = Tracker(player_df="/file/that/doesnt/exist")
+        _ = Tracker(players="/file/that/doesnt/exist")
 
-    # picked object with wrong format
-    df = [1, 2, 3]
+    # pickled object with wrong format
+    l = [1, 2, 3]
     with tempfile.TemporaryDirectory() as tmp_dir:
-        file = os.path.join(tmp_dir, "player_df.pickle")
+        file = os.path.join(tmp_dir, "players.pickle")
         with open(file, "wb") as f:
-            pickle.dump(df, f)
+            pickle.dump(l, f)
         with pytest.raises(TypeError):
-            _ = Tracker(player_df=file)
+            _ = Tracker(players=file)

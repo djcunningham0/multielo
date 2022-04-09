@@ -133,16 +133,18 @@ class Player:
 
 class Tracker:
     """
-    The Tracker object can be used to track rating changes over time for a group of players (or teams, etc.) with
-    multiple matchups against each other. The tracker stores and updates a dataframe of Player objects (in
-    Tracker.player_df) and those Player objects store the rating histories for the individual players.
+    The Tracker object can be used to track rating changes over time for a group of
+    players (or teams, etc.) with multiple matchups against each other. The tracker
+    stores and updates a list of Player objects (in Tracker.players) and those Player
+    objects store the current ratings and (optionally) the full rating histories for the
+    individual players.
     """
 
     def __init__(
         self,
         elo_rater: MultiElo = MultiElo(),
         initial_rating: float = DEFAULT_INITIAL_RATING,
-        player_df: Union[DataFrame, str] = None,
+        players: Union[List[Player], str] = None,
         keep_history: bool = True,
     ):
         """
@@ -150,9 +152,9 @@ class Tracker:
 
         :param elo_rater: a MultiElo object
         :param initial_rating: initial rating value for new players
-        :param player_df: dataframe of existing players, or a filepath of a saved player
-        dataframe (from the Tracker.save_player_data method). If None, begin with no
-        players in the dataframe. New players will be added to the dataframe when they
+        :param players: list of existing players, or a filepath of a saved player
+        list (from the Tracker.save_player_data method). If None, begin with no
+        players in the tracker. New players will be added to the tracker when they
         appear in a matchup for the first time.
         :param keep_history: if True, keep the rating history for all players; otherwise
         only maintain the current rating (setting to False will use less memory for
@@ -161,13 +163,13 @@ class Tracker:
         self.elo = elo_rater
         self.initial_player_rating = initial_rating
 
-        if player_df is None:
-            player_df = DataFrame(columns=["player_id", "player"], dtype=object)
-        elif isinstance(player_df, str):
-            with open(player_df, "rb") as f:
-                player_df = pickle.load(f)
-        self.player_df = player_df
-        self._validate_player_df()
+        if players is None:
+            players = []
+        elif isinstance(players, str):
+            with open(players, "rb") as f:
+                players = pickle.load(f)
+        self.players = players
+        self._validate_player_list()
         self.keep_history = keep_history
         logger.info(f"Created Tracker with Elo parameters K={self.elo.k}, D={self.elo.d}")
 
@@ -244,7 +246,8 @@ class Tracker:
 
         :return: dataframe with all players' ratings and number of games played
         """
-        df = self.player_df.copy()
+        df = pd.DataFrame({"player": self.players})
+        df["player_id"] = df["player"].apply(lambda x: x.id)
         df["rating"] = df["player"].apply(lambda x: x.rating)
         df["n_games"] = df["player"].apply(lambda x: x.count_games())
         df = df.sort_values("player", ascending=False).reset_index(drop=True)
@@ -261,8 +264,7 @@ class Tracker:
         history_df = DataFrame(columns=["player_id", "date", "rating"])
         history_df["rating"] = history_df["rating"].astype(float)
 
-        players = [player for player in self.player_df["player"]]
-        for player in players:
+        for player in self.players:
             # check if there are any missing dates after the first entry (the initial rating)
             if any([x[0] is None for x in player.rating_history[1:]]):
                 warnings.warn(f"WARNING: possible missing dates in history for Player {player.id}")
@@ -276,16 +278,15 @@ class Tracker:
 
     def retrieve_existing_player(self, player_id: str) -> Player:
         """Retrieve a player in the Tracker with a given ID."""
-        if player_id in self.player_df["player_id"].tolist():
-            player = self.player_df.loc[self.player_df["player_id"] == player_id, "player"].tolist()[0]
-            return player
-        else:
+        try:
+            return [x for x in self.players if x.id == player_id][0]
+        except IndexError:
             raise ValueError(f"no player found with ID {player_id}")
 
     def save_player_data(self, file: str, save_full_history: bool = True):
         """
-        Save the player dataframe (self.player_df) so the ratings can be loaded into a
-        new tracker later. The player_df dataframe is saved to a pickle file.
+        Save the player dataframe (self.players) so the ratings can be loaded into a
+        new tracker later. The self.players list is saved to a pickle file.
 
         :param file: path to write the tracker data to
         :param save_full_history: if True, save the full rating history for each player
@@ -293,50 +294,48 @@ class Tracker:
         False when you do not care about the full rating history, especially if you have
         a very large dataset.
         """
+        if save_full_history:
+            player_list = self.players
+        else:
+            # only save the ID and rating for each player (no rating history)
+            player_list = [Player(player_id=x.id, rating=x.rating) for x in self.players]
+
         with open(file, "wb") as f:
-            if save_full_history:
-                pickle.dump(self.player_df, f)
-            else:
-                # only save the ID and rating for each player (no rating history)
-                df = self.player_df.copy()
-                df["player"] = df["player"].apply(lambda x: Player(player_id=x.id, rating=x.rating))
-                pickle.dump(df, f)
+            pickle.dump(player_list, f)
 
     def _get_or_create_player(self, player_id: str) -> Player:
-        if player_id in self.player_df["player_id"].tolist():
+        try:
             return self.retrieve_existing_player(player_id)
-        else:
+        except ValueError:
             return self._create_new_player(player_id)
 
     def _create_new_player(self, player_id: str) -> Player:
-        # first check if the player already exists
-        if player_id in self.player_df["player_id"].tolist():
+        try:
+            # first check if the player already exists
+            self.retrieve_existing_player(player_id)
+        except ValueError:
+            # exception means we didn't find the player
+            # create and add the player to the database
+            player = Player(player_id, rating=self.initial_player_rating)
+            self.players.append(player)
+            self._validate_player_list()
+            return player
+        else:
+            # no exception means the player already exists
             raise ValueError(f"a player with ID {player_id} already exists in the tracker")
 
-        # create and add the player to the database
-        player = Player(player_id, rating=self.initial_player_rating)
-        add_df = DataFrame({"player_id": [player_id], "player": [player]})
-        self.player_df = pd.concat([self.player_df, add_df])
-        self._validate_player_df()
-        return player
+    def _validate_player_list(self):
+        if not isinstance(self.players, list):
+            raise TypeError(f"players should be a list (found a type of {type(self.players)})")
 
-    def _validate_player_df(self):
-        if not isinstance(self.player_df, pd.DataFrame):
-            raise TypeError(f"player_df should be a DataFrame (found a type of {type(self.player_df)})")
+        if not all([isinstance(x, Player) for x in self.players]):
+            raise TypeError("The players list should contain Player objects")
 
-        if not self.player_df["player_id"].is_unique:
+        if len(self.players) > len(set([x.id for x in self.players])):
             raise ValueError("Player IDs must be unique")
 
-        if not all([isinstance(x, Player) for x in self.player_df["player"]]):
-            raise ValueError("The player column should contain Player objects")
-
-        if any(row["player_id"] != row["player"].id for i, row in self.player_df.iterrows()):
-            raise ValueError("player_id and Player.id values don't match in self.player_df")
-
-        self.player_df = self.player_df.sort_values("player_id").reset_index(drop=True)
-
     def __repr__(self):
-        return f"Tracker({self.player_df.shape[0]} total players)"
+        return f"Tracker({len(self.players)} total players)"
 
     def __eq__(self, other):
-        return np.all(self.player_df.sort_values("player_id") == other.player_df.sort_values("player_id"))
+        return sorted(self.players) == sorted(other.players)
