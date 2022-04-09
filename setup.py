@@ -7,7 +7,7 @@ def readme():
 
 
 install_requires = ["numpy", "pandas"]
-test_requires = ["pytest"]
+test_requires = ["pytest", "coverage"]
 dev_requires = test_requires
 
 # read version from _version.py
