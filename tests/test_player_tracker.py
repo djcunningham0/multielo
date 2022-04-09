@@ -1,10 +1,20 @@
 from multielo import Player, Tracker, MultiElo
 from multielo.player_tracker import DEFAULT_INITIAL_RATING
+
 import pandas as pd
 import numpy as np
 import pickle
 import tempfile
 import os
+import pytest
+
+
+DATA = pd.DataFrame({
+    "date": ["2020-03-29", "2020-04-05", "2020-04-12"],
+    "1st": ["Homer", "Lisa", "Lisa"],
+    "2nd": ["Marge", "Bart", "Marge"],
+    "3rd": ["Bart", "Homer", "Homer"]
+})
 
 
 def test_default_player():
@@ -43,7 +53,9 @@ def test_player_equality():
     player_3 = Player("test3", rating=800)
     player_4 = Player("test4", rating=800)
     assert player_1 > player_2
+    assert player_1 >= player_2
     assert player_3 < player_2
+    assert player_3 <= player_2
     assert player_3 == player_4
 
 
@@ -51,13 +63,7 @@ def test_tracker():
     """test with some known results"""
     elo = MultiElo(k_value=32, d_value=400, score_function_base=1)
     tracker = Tracker(elo_rater=elo, initial_rating=1000)
-    data = pd.DataFrame({
-        "date": ["2020-03-29", "2020-04-05", "2020-04-12"],
-        "1st": ["Homer", "Lisa", "Lisa"],
-        "2nd": ["Marge", "Bart", "Marge"],
-        "3rd": ["Bart", "Homer", "Homer"]
-    })
-    tracker.process_data(data)
+    tracker.process_data(DATA)
     homer = tracker.retrieve_existing_player("Homer")
     marge = tracker.retrieve_existing_player("Marge")
     bart = tracker.retrieve_existing_player("Bart")
@@ -74,16 +80,10 @@ def test_tracker():
 
 
 def test_tracker_equal():
-    data = pd.DataFrame({
-        "date": ["2020-03-29", "2020-04-05", "2020-04-12"],
-        "1st": ["Homer", "Lisa", "Lisa"],
-        "2nd": ["Marge", "Bart", "Marge"],
-        "3rd": ["Bart", "Homer", "Homer"]
-    })
     tracker_1 = Tracker()
     tracker_2 = Tracker()
-    tracker_1.process_data(data)
-    tracker_2.process_data(data)
+    tracker_1.process_data(DATA)
+    tracker_2.process_data(DATA)
     assert tracker_1 == tracker_2
 
 
@@ -124,14 +124,8 @@ def test_pickle_player():
 def test_pickle_tracker_player_df():
     """Test that we can pickle the Tracker.player_df object. This is the object we need
     to export and load for batch processing."""
-    data = pd.DataFrame({
-        "date": ["2020-03-29", "2020-04-05", "2020-04-12"],
-        "1st": ["Homer", "Lisa", "Lisa"],
-        "2nd": ["Marge", "Bart", "Marge"],
-        "3rd": ["Bart", "Homer", "Homer"]
-    })
     tracker = Tracker()
-    tracker.process_data(data)
+    tracker.process_data(DATA)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         file = os.path.join(tmp_dir, "player_df.pickle")
@@ -143,3 +137,88 @@ def test_pickle_tracker_player_df():
             new_player_df = pickle.load(f)
             new_tracker = Tracker(player_df=new_player_df)
             assert new_tracker == tracker
+
+
+def test_save_and_load_player_data():
+    tracker = Tracker()
+    tracker.process_data(DATA)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file = os.path.join(tmp_dir, "player_df.pickle")
+        tracker.save_player_data(file)
+        new_tracker = Tracker(player_df=file)
+        assert tracker == new_tracker
+
+
+def test_save_and_load_player_data_no_history():
+    tracker = Tracker()
+    tracker.process_data(DATA)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file = os.path.join(tmp_dir, "player_df.pickle")
+        tracker.save_player_data(file, save_full_history=False)
+        new_tracker = Tracker(player_df=file)
+        assert tracker == new_tracker  # this checks that all player IDs and ratings are equal
+        assert all(x.count_games() == 0 for x in new_tracker.player_df["player"])
+
+
+def test_good_player_df():
+    player_df = pd.DataFrame({
+        "player_id": ["test", "test_2"],
+        "player": [Player("test"), Player("test_2")],
+    })
+    tracker = Tracker(player_df=player_df)
+    # should not raise an exception
+
+
+def test_bad_player_df():
+    # no player_id column
+    player_df = pd.DataFrame({"player": [Player("test"), Player("test_2")]})
+    with pytest.raises(KeyError):
+        _ = Tracker(player_df=player_df)
+
+    # no player column
+    player_df = pd.DataFrame({"player_id": ["test", "test_2"]})
+    with pytest.raises(KeyError):
+        _ = Tracker(player_df=player_df)
+
+    # IDs don't match
+    player_df = pd.DataFrame({
+        "player_id": ["test", "test_2"],
+        "player": [Player("a"), Player("b")],
+    })
+    with pytest.raises(ValueError):
+        _ = Tracker(player_df=player_df)
+
+    # duplicate players
+    player_df = pd.DataFrame({
+        "player_id": ["test", "test"],
+        "player": [Player("test"), Player("test")],
+    })
+    with pytest.raises(ValueError):
+        _ = Tracker(player_df=player_df)
+
+    # bad type in player column
+    player_df = pd.DataFrame({
+        "player_id": ["test", "test_2"],
+        "player": [{"id": "test", "rating": 1000}, {"id": "test_2", "rating": 1000}],
+    })
+    with pytest.raises(ValueError):
+        _ = Tracker(player_df=player_df)
+
+    # bad type
+    with pytest.raises(TypeError):
+        _ = Tracker(player_df=1)
+
+    # string that isn't a valid filepath
+    with pytest.raises(FileNotFoundError):
+        _ = Tracker(player_df="/file/that/doesnt/exist")
+
+    # picked object with wrong format
+    df = [1, 2, 3]
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file = os.path.join(tmp_dir, "player_df.pickle")
+        with open(file, "wb") as f:
+            pickle.dump(df, f)
+        with pytest.raises(TypeError):
+            _ = Tracker(player_df=file)

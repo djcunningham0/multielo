@@ -4,6 +4,8 @@ from pandas import DataFrame
 from typing import Union, List, Tuple
 import logging
 import warnings
+import pickle
+
 from multielo.multielo import MultiElo
 
 
@@ -43,16 +45,18 @@ class Player:
             self.rating_history = rating_history
         logger.info(f"created player with ID {player_id} and rating {rating}")
 
-    def update_rating(self, new_rating: float, date: Union[str, float]):
+    def update_rating(self, new_rating: float, date: Union[str, float], keep_history: bool = True):
         """
         Update a player's rating and rating history. (updates the self.rating and self.rating_history attributes)
 
         :param new_rating: player's new rating
         :param date: date the new rating was achieved
+        :param keep_history: if True, add an entry to the player's rating history
         """
         logger.info(f"Updating rating for {self.id}: {self.rating:.3f} --> {new_rating:.3f}")
         self.rating = new_rating
-        self._update_rating_history(rating=new_rating, date=date)
+        self._update_rating_history(rating=new_rating, date=date, keep_history=keep_history)
+
 
     def get_rating_as_of_date(
         self,
@@ -87,14 +91,22 @@ class Player:
         """Counts games played by this Player."""
         return len(self.rating_history) - 1
 
-    def _update_rating_history(self, rating: float, date: Union[str, float]):
+    def _update_rating_history(self, rating: float, date: Union[str, float], keep_history: bool = True):
         """
         Update a player's rating history (self.rating_history)
 
         :param rating: player's new rating effective on this date
         :param date: effective date for new rating
+        :param keep_history: if True, append to the rating history; otherwise replace
+        the last date in the history
         """
-        self.rating_history.append((date, rating))
+        if keep_history:
+            self.rating_history.append((date, rating))
+        else:
+            if self.rating_history:
+                self.rating_history[-1] = (date, rating)
+            else:
+                self.rating_history = [(date, rating)]
 
     def __str__(self):
         n_games = self.count_games()
@@ -130,25 +142,34 @@ class Tracker:
         self,
         elo_rater: MultiElo = MultiElo(),
         initial_rating: float = DEFAULT_INITIAL_RATING,
-        player_df: DataFrame = None,
+        player_df: Union[DataFrame, str] = None,
+        keep_history: bool = True,
     ):
         """
         Instantiate a tracker that will track player's ratings over time as matchups occur.
 
-        :param elo_rater:
+        :param elo_rater: a MultiElo object
         :param initial_rating: initial rating value for new players
-        :param player_df: dataframe of existing players. New players will be added to the dataframe when they
-        appear in a matchup for the first time. If None, begin with no players in the dataframe.
+        :param player_df: dataframe of existing players, or a filepath of a saved player
+        dataframe (from the Tracker.save_player_data method). If None, begin with no
+        players in the dataframe. New players will be added to the dataframe when they
+        appear in a matchup for the first time.
+        :param keep_history: if True, keep the rating history for all players; otherwise
+        only maintain the current rating (setting to False will use less memory for
+        large datasets)
         """
         self.elo = elo_rater
         self.initial_player_rating = initial_rating
 
         if player_df is None:
             player_df = DataFrame(columns=["player_id", "player"], dtype=object)
-
+        elif isinstance(player_df, str):
+            with open(player_df, "rb") as f:
+                player_df = pickle.load(f)
         self.player_df = player_df
         self._validate_player_df()
-        logger.info(f"Created Tracker with Elo paramers K={self.elo.k}, D={self.elo.d}")
+        self.keep_history = keep_history
+        logger.info(f"Created Tracker with Elo parameters K={self.elo.k}, D={self.elo.d}")
 
     def process_data(self, matchup_history_df: DataFrame, date_col: str = "date"):
         """
@@ -215,7 +236,7 @@ class Tracker:
             new_ratings = self.elo.get_new_ratings(initial_ratings, result_order=result_order)
             logger.info(f"processing rating changes for date {date}...")
             for i, player in enumerate(players):
-                player.update_rating(new_ratings[i], date=date)
+                player.update_rating(new_ratings[i], date=date, keep_history=self.keep_history)
 
     def get_current_ratings(self) -> DataFrame:
         """
@@ -261,6 +282,26 @@ class Tracker:
         else:
             raise ValueError(f"no player found with ID {player_id}")
 
+    def save_player_data(self, file: str, save_full_history: bool = True):
+        """
+        Save the player dataframe (self.player_df) so the ratings can be loaded into a
+        new tracker later. The player_df dataframe is saved to a pickle file.
+
+        :param file: path to write the tracker data to
+        :param save_full_history: if True, save the full rating history for each player
+        in the tracker; otherwise only save the current ratings. Recommended to set to
+        False when you do not care about the full rating history, especially if you have
+        a very large dataset.
+        """
+        with open(file, "wb") as f:
+            if save_full_history:
+                pickle.dump(self.player_df, f)
+            else:
+                # only save the ID and rating for each player (no rating history)
+                df = self.player_df.copy()
+                df["player"] = df["player"].apply(lambda x: Player(player_id=x.id, rating=x.rating))
+                pickle.dump(df, f)
+
     def _get_or_create_player(self, player_id: str) -> Player:
         if player_id in self.player_df["player_id"].tolist():
             return self.retrieve_existing_player(player_id)
@@ -280,11 +321,17 @@ class Tracker:
         return player
 
     def _validate_player_df(self):
+        if not isinstance(self.player_df, pd.DataFrame):
+            raise TypeError(f"player_df should be a DataFrame (found a type of {type(self.player_df)})")
+
         if not self.player_df["player_id"].is_unique:
             raise ValueError("Player IDs must be unique")
 
         if not all([isinstance(x, Player) for x in self.player_df["player"]]):
             raise ValueError("The player column should contain Player objects")
+
+        if any(row["player_id"] != row["player"].id for i, row in self.player_df.iterrows()):
+            raise ValueError("player_id and Player.id values don't match in self.player_df")
 
         self.player_df = self.player_df.sort_values("player_id").reset_index(drop=True)
 
