@@ -1,5 +1,17 @@
 # Change Log
 
+## [0.4.1] -- 2022-04-16
+
+### Fixed
+
+* The correct date column name is now used in the tracker history df.
+Also added some input validation around the date_col parameter in Tracker.process_data (now all subsequent calls of that method must use the same date_col).
+
+### Deprecated
+
+* The date_col parameter will be removed from the Tracker.process_data method in a future release (0.5.x).
+Instead, the date_col parameter should be provided when instantiating the Tracker (`tracker = Tracker(date_col=...)).
+
 ## [0.4.0] -- 2022-04-09
 
 ***~~ Contains breaking changes ~~***

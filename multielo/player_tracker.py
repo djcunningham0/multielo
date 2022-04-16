@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from pandas import DataFrame
 from typing import Union, List, Tuple
 import logging
 import warnings
@@ -12,6 +11,7 @@ from multielo.multielo import MultiElo
 DEFAULT_INITIAL_RATING = 1000
 
 logger = logging.getLogger("multielo.player_tracker")
+warnings.simplefilter("once", DeprecationWarning)
 
 
 class Player:
@@ -57,7 +57,6 @@ class Player:
         self.rating = new_rating
         self._update_rating_history(rating=new_rating, date=date, keep_history=keep_history)
 
-
     def get_rating_as_of_date(
         self,
         date: Union[str, float],
@@ -74,7 +73,7 @@ class Player:
 
         :return: player's rating as of the specified date
         """
-        history_df = DataFrame(self.rating_history, columns=["date", "rating"])
+        history_df = pd.DataFrame(self.rating_history, columns=["date", "rating"])
 
         # only select one entry per distinct date
         history_df["r"] = history_df.groupby(["date"]).rank(method="first", ascending=False)
@@ -146,6 +145,7 @@ class Tracker:
         initial_rating: float = DEFAULT_INITIAL_RATING,
         players: Union[List[Player], str] = None,
         keep_history: bool = True,
+        date_col: str = None,
     ):
         """
         Instantiate a tracker that will track player's ratings over time as matchups occur.
@@ -159,6 +159,9 @@ class Tracker:
         :param keep_history: if True, keep the rating history for all players; otherwise
         only maintain the current rating (setting to False will use less memory for
         large datasets)
+        :param date_col: name of the date column to use when processing data and
+        creating the history dataframe. If not provided, it will take the value used the
+        first time the process_data method is called.
         """
         self.elo = elo_rater
         self.initial_player_rating = initial_rating
@@ -171,9 +174,10 @@ class Tracker:
         self.players = players
         self._validate_player_list()
         self.keep_history = keep_history
+        self.date_col = date_col
         logger.info(f"Created Tracker with Elo parameters K={self.elo.k}, D={self.elo.d}")
 
-    def process_data(self, matchup_history_df: DataFrame, date_col: str = "date"):
+    def process_data(self, matchup_history_df: pd.DataFrame, date_col: str = None):
         """
         Process the full matchup history of a group of players. Update the ratings and rating history for all
         players in found in the matchup history.
@@ -206,15 +210,35 @@ class Tracker:
         :param matchup_history_df: dataframe of matchup history with a column for date and one column for each
         possible finishing place (e.g., "date", "1st", "2nd", "3rd", ...). Finishing place columns should be in
         order of first to last. Column names do not matter.
-        :param date_col: name of the date column
+        :param date_col: name of the date column. If self.date_col is None, then self.date_col will be set to
+        this value. Otherwise, this parameter should not be specified (or it should be equal to self.date_col).
+        (default = self.date_col or "date")
         """
-        matchup_history_df = matchup_history_df.sort_values(date_col).reset_index(drop=True)
-        place_cols = [x for x in matchup_history_df.columns if x != date_col]
+        if date_col is not None:
+            warnings.warn("The date_col parameter will be removed from process_data in a "
+                          "future version. Set the date_col parameter when instantiating the "
+                          "Tracker object instead, i.e., `tracker = Tracker(date_col=...)`",
+                          DeprecationWarning)
+
+        if self.date_col is None:
+            self.date_col = date_col if date_col is not None else "date"
+        elif date_col is None:
+            pass
+        elif date_col != self.date_col:
+            raise ValueError(f"The provided date column ({date_col}) does not match the established date column "
+                             f"in the Tracker ({self.date_col}")
+
+        if self.date_col not in matchup_history_df.columns:
+            raise ValueError(f"The tracker's date column ({self.date_col}) does not appear in the columns of "
+                             f"the dataframe being processed (available columns: {matchup_history_df.columns})")
+
+        matchup_history_df = matchup_history_df.sort_values(self.date_col).reset_index(drop=True)
+        place_cols = [x for x in matchup_history_df.columns if x != self.date_col]
         matchup_history_df = matchup_history_df.dropna(how="all", axis=0, subset=place_cols)  # drop rows if all NaN
 
         # loop through each row of history, then loop through players for each date
         for _, row in matchup_history_df.iterrows():
-            date = row[date_col]
+            date = row[self.date_col]
             players = []
             result_order = []
             for i, col in enumerate(place_cols):
@@ -240,7 +264,7 @@ class Tracker:
             for i, player in enumerate(players):
                 player.update_rating(new_ratings[i], date=date, keep_history=self.keep_history)
 
-    def get_current_ratings(self) -> DataFrame:
+    def get_current_ratings(self) -> pd.DataFrame:
         """
         Retrieve the current ratings of all players in this Tracker.
 
@@ -255,13 +279,14 @@ class Tracker:
         df = df[["rank", "player_id", "n_games", "rating"]]
         return df
 
-    def get_history_df(self) -> DataFrame:
+    def get_history_df(self) -> pd.DataFrame:
         """
         Retrieve the rating history for all players in this Tracker.
 
         :return: dataframe with all players' ratings on each date that they changed
         """
-        history_df = DataFrame(columns=["player_id", "date", "rating"])
+        date_col = self.date_col or "date"
+        history_df = pd.DataFrame(columns=["player_id", date_col, "rating"])
         history_df["rating"] = history_df["rating"].astype(float)
 
         for player in self.players:
@@ -269,8 +294,8 @@ class Tracker:
             if any([x[0] is None for x in player.rating_history[1:]]):
                 warnings.warn(f"WARNING: possible missing dates in history for Player {player.id}")
 
-            player_history_df = DataFrame(player.rating_history, columns=["date", "rating"])
-            player_history_df = player_history_df[~player_history_df["date"].isna()]
+            player_history_df = pd.DataFrame(player.rating_history, columns=[date_col, "rating"])
+            player_history_df = player_history_df[~player_history_df[date_col].isna()]
             player_history_df["player_id"] = player.id
             history_df = pd.concat([history_df, player_history_df], sort=False)
 

@@ -79,6 +79,33 @@ def test_tracker():
     assert lisa == 1041.2985450366014
 
 
+def test_tracker_custom_date_col_name():
+    data = DATA.rename(columns={"date": "week"}).copy()
+    tracker = Tracker()
+    with pytest.deprecated_call():
+        tracker.process_data(data, date_col="week")
+    assert "week" in tracker.get_history_df().columns
+
+
+def test_tracker_error_date_col_does_not_match():
+    data = DATA.rename(columns={"date": "week"}).copy()
+    tracker = Tracker(date_col="date")
+    with pytest.raises(ValueError):
+        with pytest.deprecated_call():
+            tracker.process_data(data, date_col="week")
+
+
+def test_tracker_error_different_date_cols():
+    data = DATA.rename(columns={"date": "week"}).copy()
+    tracker = Tracker()
+    tracker.process_data(DATA)  # date_col is "date"
+    with pytest.raises(ValueError):
+        tracker.process_data(data)  # "date" is not in the columns
+    with pytest.raises(ValueError):
+        with pytest.deprecated_call():
+            tracker.process_data(data, date_col="week")  # already implicitly set date_col to "date"
+
+
 def test_tracker_equal():
     tracker_1 = Tracker()
     tracker_2 = Tracker()
