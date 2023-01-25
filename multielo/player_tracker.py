@@ -243,7 +243,7 @@ class Tracker:
             result_order = []
             for i, col in enumerate(place_cols):
                 current_player = row[col]
-                if current_player is None:
+                if pd.isna(current_player):
                     pass
                 elif isinstance(current_player, (tuple, list)):
                     # multiple players (a tie)
